@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sendery"
+version = "0.1.0"
+description = "Sendery template email client"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.urls]
+Documentation = "https://sendery.co/en/docs/python"
+Repository = "https://github.com/sendery-co/sendery-python"

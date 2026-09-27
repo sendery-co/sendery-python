@@ -1,0 +1,22 @@
+name: Release
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install . build twine
+      - run: python -c "import os,tomllib; assert 'v'+tomllib.load(open('pyproject.toml','rb'))['project']['version'] == os.environ['GITHUB_REF_NAME']"
+      - run: python -m unittest discover -s tests
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: pypa/gh-action-pypi-publish@release/v1
