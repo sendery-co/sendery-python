@@ -34,3 +34,19 @@ class ClientTests(unittest.TestCase):
         for url in ["http://example.com", "https://user:pass@example.com"]:
             with self.assertRaises(ValueError):
                 Sendery("test", url)
+
+
+class AttachmentTests(unittest.TestCase):
+    def test_frozen_attachment_and_combined_limit(self):
+        from sendery import attachment
+        from unittest.mock import patch
+        files = [attachment("invoice.pdf", b"PDF\x00bytes", "application/pdf")]
+        client = Sendery("test")
+        email = client.prepare(to="a@example.com", template="receipt", data={}, attachments=files)
+        files[0]["content"] = "changed"
+        with patch.object(client, "_request", return_value={"id": "one", "status": "queued"}) as request:
+            email.send(); email.send()
+            self.assertEqual(request.call_args_list[0], request.call_args_list[1])
+            self.assertEqual(attachment("invoice.pdf", b"PDF\x00bytes", "application/pdf"), json.loads(request.call_args.args[2])["attachments"][0])
+        with self.assertRaises(ValueError):
+            client.prepare(to="a@example.com", template="receipt", data={}, attachments=[attachment("a.pdf", b"x" * 5242880), attachment("b.pdf", b"x")])

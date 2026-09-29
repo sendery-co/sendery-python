@@ -1,4 +1,5 @@
 """Server-side Sendery template API client."""
+import base64
 import json
 import math
 import random
@@ -10,6 +11,13 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
+
+
+def attachment(filename, content, content_type="application/octet-stream"):
+    """Encode file bytes for a per-send attachment."""
+    if not isinstance(content, bytes) or not 0 < len(content) <= 5242880:
+        raise ValueError("Attachments must contain 1 to 5,242,880 bytes.")
+    return {"filename": filename, "content": base64.b64encode(content).decode("ascii"), "content_type": content_type}
 
 
 class SenderyError(Exception):
@@ -63,10 +71,14 @@ class Sendery:
             raise ValueError("Provide an API key and an HTTPS URL (HTTP allowed only on loopback).")
         self._api_key, self._base_url, self._opener = api_key, base_url.rstrip("/"), build_opener(_NoRedirect)
 
-    def prepare(self, *, to, template, data, locale=None, idempotency_key=None):
+    def prepare(self, *, to, template, data, locale=None, idempotency_key=None, attachments=None):
         if not isinstance(data, dict):
             raise ValueError("data must be a dictionary.")
         payload = {"to": to, "template": template, "data": data}
+        if attachments:
+            if len(attachments) > 10 or sum(len(base64.b64decode(item["content"], validate=True)) for item in attachments) > 5242880:
+                raise ValueError("Use at most 10 attachments, up to 5 MB combined.")
+            payload["attachments"] = attachments
         if locale is not None:
             payload["locale"] = locale
         return PendingEmail(self, payload, idempotency_key if idempotency_key is not None else str(uuid.uuid4()))

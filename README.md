@@ -40,6 +40,27 @@ receipt = sendery.send(
 print(receipt["id"])
 ```
 
+## Attachments
+
+Use `attachment()` to create an attachment from file bytes. The helper handles base64 encoding.
+
+Send up to 10 files totaling 5 MB. See the [attachment reference](https://sendery.co/en/docs/send-email#section-5) for supported formats and limits.
+
+```python
+from pathlib import Path
+from sendery import attachment
+
+file = Path("document.pdf").read_bytes()
+
+sendery.prepare(
+    to="alex@example.com",
+    template="welcome",
+    data={"name": "Alex", "action_url": "https://example.com/start"},
+    idempotency_key="welcome-attachment-123",
+    attachments=[attachment("document.pdf", file, "application/pdf")],
+).retry().send()
+```
+
 ## Retrieve an email
 
 Use the returned ID to [check delivery status](https://sendery.co/en/docs/get-email).
