@@ -9,12 +9,25 @@ class ClientTests(unittest.TestCase):
         client = Sendery("test")
         data = {"name": "Original"}
         email = client.prepare(to="alex@example.com", template="welcome", data=data)
+        email.version(3)
         data["name"] = "Changed"
         with patch.object(client, "_request", side_effect=[SenderyError(503), {"id": "one", "status": "queued"}]) as request, patch("sendery.time.sleep"):
             email.retry().send()
         self.assertEqual(request.call_args_list[0], request.call_args_list[1])
         self.assertEqual("Original", json.loads(request.call_args.args[2])["data"]["name"])
         self.assertEqual(email.idempotency_key, request.call_args.args[3])
+        self.assertEqual(3, json.loads(request.call_args.args[2])["version"])
+
+    def test_version_is_optional_and_validated(self):
+        client = Sendery("test")
+        with patch.object(client, "_request") as request:
+            client.send(to="a@example.com", template="welcome", data={})
+            self.assertNotIn("version", json.loads(request.call_args.args[2]))
+            client.send(to="a@example.com", template="welcome", data={}, version=2)
+            self.assertEqual(2, json.loads(request.call_args.args[2])["version"])
+        for version in [0, -1, 1.5, "3", None, True]:
+            with self.assertRaises(ValueError):
+                client.prepare(to="a@example.com", template="welcome", data={}).version(version)
 
     def test_capacity_is_not_retried(self):
         client = Sendery("test")

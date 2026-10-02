@@ -45,6 +45,14 @@ class PendingEmail:
     def idempotency_key(self):
         return self._key
 
+    def version(self, version):
+        if type(version) is not int or version < 1:
+            raise ValueError("Version must be a positive integer.")
+        payload = json.loads(self._body)
+        payload["version"] = version
+        self._body = json.dumps(payload, allow_nan=False).encode()
+        return self
+
     def retry(self, retries=3):
         if type(retries) is not int or not 0 <= retries <= 5:
             raise ValueError("Choose 0 to 5 retries.")
@@ -71,7 +79,7 @@ class Sendery:
             raise ValueError("Provide an API key and an HTTPS URL (HTTP allowed only on loopback).")
         self._api_key, self._base_url, self._opener = api_key, base_url.rstrip("/"), build_opener(_NoRedirect)
 
-    def prepare(self, *, to, template, data, locale=None, idempotency_key=None, attachments=None):
+    def prepare(self, *, to, template, data, locale=None, idempotency_key=None, attachments=None, version=None):
         if not isinstance(data, dict):
             raise ValueError("data must be a dictionary.")
         payload = {"to": to, "template": template, "data": data}
@@ -81,7 +89,8 @@ class Sendery:
             payload["attachments"] = attachments
         if locale is not None:
             payload["locale"] = locale
-        return PendingEmail(self, payload, idempotency_key if idempotency_key is not None else str(uuid.uuid4()))
+        email = PendingEmail(self, payload, idempotency_key if idempotency_key is not None else str(uuid.uuid4()))
+        return email if version is None else email.version(version)
 
     def send(self, **kwargs):
         return self.prepare(**kwargs).send()

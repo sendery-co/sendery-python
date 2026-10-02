@@ -16,13 +16,15 @@ pip install sendery
 
 ## Set up
 
-Publish a `welcome` template with `name` and `action_url` variables, and create a [project API key](https://sendery.co/en/docs/authentication). Store it as `SENDERY_API_KEY` on your server.
+Choose a published template and create a [project API key](https://sendery.co/en/docs/authentication). Store the key as `SENDERY_API_KEY` on your server.
 
 ```bash
 export SENDERY_API_KEY="your_project_api_key"
 ```
 
 ## Send an email
+
+Replace `your-template` with your published template’s key and `data` with its variables.
 
 The response contains the accepted email’s `id` and `status`. Calls are synchronous; use `asyncio.to_thread()` when sending from async code.
 
@@ -33,18 +35,30 @@ from sendery import Sendery
 sendery = Sendery(os.environ["SENDERY_API_KEY"])
 receipt = sendery.send(
     to="alex@example.com",
-    template="welcome",
+    template="your-template",
     data={"name": "Alex", "action_url": "https://example.com/start"},
 )
 
 print(receipt["id"])
 ```
 
+## Send a specific version
+
+Choose a [published template version](https://sendery.co/en/docs/send-email#section-5) to keep sending it after newer versions are published. By default, Sendery uses the latest version.
+
+```python
+receipt = sendery.prepare(
+    to="alex@example.com",
+    template="your-template",
+    data={"name": "Alex", "action_url": "https://example.com/start"},
+).version(3).send()
+```
+
 ## Attachments
 
 Use `attachment()` to create an attachment from file bytes. The helper handles base64 encoding.
 
-Send up to 10 files totaling 5 MB. See the [attachment reference](https://sendery.co/en/docs/send-email#section-5) for supported formats and limits.
+Send up to 10 files totaling 5 MB. See the [attachment reference](https://sendery.co/en/docs/send-email#section-6) for supported formats and limits.
 
 ```python
 from pathlib import Path
@@ -54,9 +68,9 @@ file = Path("document.pdf").read_bytes()
 
 sendery.prepare(
     to="alex@example.com",
-    template="welcome",
+    template="your-template",
     data={"name": "Alex", "action_url": "https://example.com/start"},
-    idempotency_key="welcome-attachment-123",
+    idempotency_key="your-idempotency-key",
     attachments=[attachment("document.pdf", file, "application/pdf")],
 ).retry().send()
 ```
@@ -72,14 +86,14 @@ print(message["status"])
 
 ## Retry a send
 
-Use a key such as `welcome-123` for one email, and [keep the payload unchanged on retries](https://sendery.co/en/docs/idempotency). `retry(3)` allows up to three additional attempts for temporary failures; `send()` alone makes one attempt.
+Use `retry(3)` for up to three extra attempts after temporary failures. Keep the same [idempotency key and email data](https://sendery.co/en/docs/idempotency) on every attempt.
 
 ```python
 email = sendery.prepare(
     to="alex@example.com",
-    template="welcome",
+    template="your-template",
     data={"name": "Alex", "action_url": "https://example.com/start"},
-    idempotency_key="welcome-123",
+    idempotency_key="your-idempotency-key",
 )
 receipt = email.retry(3).send()
 ```
@@ -101,7 +115,7 @@ except SenderyError as error:
 
 ## More
 
-See [idempotency and retries](https://sendery.co/en/docs/idempotency) for retry conditions, delays, and reusing a key across attempts.
+Learn how to [retry emails without duplicate sends](https://sendery.co/en/docs/idempotency).
 
 ## License
 
