@@ -1,3 +1,4 @@
+import io
 import json
 import unittest
 from unittest.mock import patch
@@ -5,6 +6,42 @@ from sendery import Sendery, SenderyError
 
 
 class ClientTests(unittest.TestCase):
+    def test_catalog_transport_validates_the_response_shape(self):
+        client = Sendery("test")
+        with patch.object(client._opener, "open", return_value=io.BytesIO(b'{"name":"document.signed","verified":false}')):
+            self.assertFalse(client.define_event("document.signed", {})["verified"])
+        with patch.object(client._opener, "open", return_value=io.BytesIO(b'{"events":[]}')):
+            self.assertEqual([], client.get_event_types())
+        with patch.object(client._opener, "open", return_value=io.BytesIO(b'{"events":[]}')):
+            with self.assertRaises(SenderyError):
+                client.get("email")
+
+    def test_event_definitions_and_catalog_have_distinct_response_shapes(self):
+        client = Sendery("test")
+        definition = {"label": "Document signed", "fields": {}, "recipients": {}}
+        with patch.object(client, "_request", return_value={"name": "document.signed", "verified": False}) as request:
+            self.assertFalse(client.define_event("document.signed", definition)["verified"])
+            self.assertEqual(("PUT", "/api/v1/event-types/document.signed"), request.call_args.args[:2])
+            self.assertEqual(definition, json.loads(request.call_args.args[2]))
+        with patch.object(client, "_request", return_value={"events": []}):
+            self.assertEqual([], client.get_event_types())
+
+    def test_events_freeze_nested_data_and_retry_with_the_same_key(self):
+        client = Sendery("test")
+        data = {"owner": {"email": "alex@example.com"}}
+        event = client.event(name="listing.created", object_type="listing", object_id="42", data=data, correlation_id="attempt-1")
+        data["owner"]["email"] = "changed@example.com"
+        with patch.object(client, "_request", side_effect=[SenderyError(503), {"id": "event", "status": "accepted"}]) as request, patch("sendery.time.sleep"):
+            event.retry().send()
+        self.assertEqual(request.call_args_list[0], request.call_args_list[1])
+        self.assertEqual("/api/v1/events", request.call_args.args[1])
+        self.assertEqual("alex@example.com", json.loads(request.call_args.args[2])["data"]["owner"]["email"])
+        with patch.object(client, "_request") as request:
+            client.get_event("event/id")
+            self.assertEqual("/api/v1/events/event%2Fid", request.call_args.args[1])
+            client.forget_object("listing", "42")
+            self.assertEqual("DELETE", request.call_args.args[0])
+
     def test_retry_preserves_key_and_original_data(self):
         client = Sendery("test")
         data = {"name": "Original"}

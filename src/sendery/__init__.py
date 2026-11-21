@@ -35,7 +35,9 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-class PendingEmail:
+class PendingRequest:
+    endpoint = ""
+
     def __init__(self, client, payload, key):
         if not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}", key):
             raise ValueError("Invalid idempotency key.")
@@ -44,14 +46,6 @@ class PendingEmail:
     @property
     def idempotency_key(self):
         return self._key
-
-    def version(self, version):
-        if type(version) is not int or version < 1:
-            raise ValueError("Version must be a positive integer.")
-        payload = json.loads(self._body)
-        payload["version"] = version
-        self._body = json.dumps(payload, allow_nan=False).encode()
-        return self
 
     def retry(self, retries=3):
         if type(retries) is not int or not 0 <= retries <= 5:
@@ -62,7 +56,7 @@ class PendingEmail:
     def send(self):
         for attempt in range(self._retries + 1):
             try:
-                return self.client._request("POST", "/api/v1/emails", self._body, self._key)
+                return self.client._request("POST", self.endpoint, self._body, self._key)
             except SenderyError as error:
                 if attempt == self._retries or not error.retryable:
                     raise
@@ -70,6 +64,22 @@ class PendingEmail:
                 if delay > 30:
                     raise
                 time.sleep(delay)
+
+
+class PendingEmail(PendingRequest):
+    endpoint = "/api/v1/emails"
+
+    def version(self, version):
+        if type(version) is not int or version < 1:
+            raise ValueError("Version must be a positive integer.")
+        payload = json.loads(self._body)
+        payload["version"] = version
+        self._body = json.dumps(payload, allow_nan=False).encode()
+        return self
+
+
+class PendingEvent(PendingRequest):
+    endpoint = "/api/v1/events"
 
 
 class Sendery:
@@ -95,6 +105,27 @@ class Sendery:
     def send(self, **kwargs):
         return self.prepare(**kwargs).send()
 
+    def define_event(self, name, definition):
+        """Register readable fields and recipient roles once per event type."""
+        return self._request("PUT", "/api/v1/event-types/" + quote(name, safe=""), json.dumps(definition, allow_nan=False).encode())
+
+    def get_event_types(self):
+        return self._request("GET", "/api/v1/event-types")["events"]
+
+    def event(self, *, name, object_type, object_id, data, correlation_id=None, idempotency_key=None):
+        if not isinstance(data, dict):
+            raise ValueError("data must be a dictionary.")
+        payload = {"name": name, "object": {"type": object_type, "id": object_id}, "data": data}
+        if correlation_id is not None:
+            payload["correlation_id"] = correlation_id
+        return PendingEvent(self, payload, idempotency_key if idempotency_key is not None else str(uuid.uuid4()))
+
+    def get_event(self, event_id):
+        return self._request("GET", "/api/v1/events/" + quote(event_id, safe=""))
+
+    def forget_object(self, object_type, object_id):
+        return self._request("DELETE", "/api/v1/event-objects", json.dumps({"type": object_type, "id": object_id}).encode())
+
     def get(self, message_id):
         return self._request("GET", "/api/v1/emails/" + quote(message_id, safe=""))
 
@@ -108,7 +139,15 @@ class Sendery:
                     result = json.load(response)
                 except (ValueError, UnicodeError):
                     raise SenderyError(0, "invalid_response") from None
-                if not isinstance(result, dict) or not isinstance(result.get("id"), str) or not isinstance(result.get("status"), str):
+                valid = isinstance(result, dict)
+                if valid:
+                    if path == "/api/v1/event-types":
+                        valid = isinstance(result.get("events"), list)
+                    elif path.startswith("/api/v1/event-types/"):
+                        valid = isinstance(result.get("name"), str) and isinstance(result.get("verified"), bool)
+                    else:
+                        valid = isinstance(result.get("id"), str) and isinstance(result.get("status"), str)
+                if not valid:
                     raise SenderyError(0, "invalid_response")
                 return result
         except HTTPError as error:
