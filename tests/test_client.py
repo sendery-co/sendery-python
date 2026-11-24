@@ -28,14 +28,14 @@ class ClientTests(unittest.TestCase):
 
     def test_events_freeze_nested_data_and_retry_with_the_same_key(self):
         client = Sendery("test")
-        data = {"owner": {"email": "alex@example.com"}}
+        data = {"owner": {"email": "steven@example.com"}}
         event = client.event(name="listing.created", object_type="listing", object_id="42", data=data, correlation_id="attempt-1")
         data["owner"]["email"] = "changed@example.com"
         with patch.object(client, "_request", side_effect=[SenderyError(503), {"id": "event", "status": "accepted"}]) as request, patch("sendery.time.sleep"):
             event.retry().send()
         self.assertEqual(request.call_args_list[0], request.call_args_list[1])
         self.assertEqual("/api/v1/events", request.call_args.args[1])
-        self.assertEqual("alex@example.com", json.loads(request.call_args.args[2])["data"]["owner"]["email"])
+        self.assertEqual("steven@example.com", json.loads(request.call_args.args[2])["data"]["owner"]["email"])
         with patch.object(client, "_request") as request:
             client.get_event("event/id")
             self.assertEqual("/api/v1/events/event%2Fid", request.call_args.args[1])
@@ -45,7 +45,7 @@ class ClientTests(unittest.TestCase):
     def test_retry_preserves_key_and_original_data(self):
         client = Sendery("test")
         data = {"name": "Original"}
-        email = client.prepare(to="alex@example.com", template="welcome", data=data)
+        email = client.prepare(to="steven@example.com", template="welcome", data=data)
         email.version(3)
         data["name"] = "Changed"
         with patch.object(client, "_request", side_effect=[SenderyError(503), {"id": "one", "status": "queued"}]) as request, patch("sendery.time.sleep"):

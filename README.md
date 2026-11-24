@@ -34,9 +34,9 @@ from sendery import Sendery
 
 sendery = Sendery(os.environ["SENDERY_API_KEY"])
 receipt = sendery.send(
-    to="alex@example.com",
+    to="steven@example.com",
     template="your-template",
-    data={"name": "Alex", "action_url": "https://example.com/start"},
+    data={"name": "Steven", "action_url": "https://example.com/start"},
 )
 
 print(receipt["id"])
@@ -48,9 +48,9 @@ Choose a [published template version](https://sendery.co/en/docs/send-email#sect
 
 ```python
 receipt = sendery.prepare(
-    to="alex@example.com",
+    to="steven@example.com",
     template="your-template",
-    data={"name": "Alex", "action_url": "https://example.com/start"},
+    data={"name": "Steven", "action_url": "https://example.com/start"},
 ).version(3).send()
 ```
 
@@ -67,9 +67,9 @@ from sendery import attachment
 file = Path("document.pdf").read_bytes()
 
 sendery.prepare(
-    to="alex@example.com",
+    to="steven@example.com",
     template="your-template",
-    data={"name": "Alex", "action_url": "https://example.com/start"},
+    data={"name": "Steven", "action_url": "https://example.com/start"},
     idempotency_key="your-idempotency-key",
     attachments=[attachment("document.pdf", file, "application/pdf")],
 ).retry().send()
@@ -90,9 +90,9 @@ Use `retry(3)` for up to three extra attempts after temporary failures. Keep the
 
 ```python
 email = sendery.prepare(
-    to="alex@example.com",
+    to="steven@example.com",
     template="your-template",
-    data={"name": "Alex", "action_url": "https://example.com/start"},
+    data={"name": "Steven", "action_url": "https://example.com/start"},
     idempotency_key="your-idempotency-key",
 )
 receipt = email.retry(3).send()
@@ -130,7 +130,7 @@ Start with [Connecting your application](https://sendery.co/en/docs/connect-even
 ```python
 receipt = sendery.event(
     name="account.created", object_type="account", object_id="842",
-    data={"email": "alex@example.com", "name": "Alex"},
+    data={"email": "steven@example.com", "name": "Steven"},
 ).retry().send()
 ```
 
