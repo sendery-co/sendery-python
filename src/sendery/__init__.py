@@ -105,6 +105,13 @@ class Sendery:
     def send(self, **kwargs):
         return self.prepare(**kwargs).send()
 
+    def render(self, *, template, data, locale=None, version=None):
+        """Render a published template without sending or storing a message."""
+        if version is not None and (type(version) is not int or version < 1):
+            raise ValueError("Version must be a positive integer.")
+        payload = {k: v for k, v in {"template": template, "data": data, "locale": locale, "version": version}.items() if v is not None}
+        return self._request("POST", "/api/v1/emails/render", json.dumps(payload, allow_nan=False).encode())
+
     def define_event(self, name, definition):
         """Register readable fields and recipient roles once per event type."""
         return self._request("PUT", "/api/v1/event-types/" + quote(name, safe=""), json.dumps(definition, allow_nan=False).encode())
@@ -141,7 +148,9 @@ class Sendery:
                     raise SenderyError(0, "invalid_response") from None
                 valid = isinstance(result, dict)
                 if valid:
-                    if path == "/api/v1/event-types":
+                    if path == "/api/v1/emails/render":
+                        valid = all(isinstance(result.get(field), str) for field in ("subject", "html", "text"))
+                    elif path == "/api/v1/event-types":
                         valid = isinstance(result.get("events"), list)
                     elif path.startswith("/api/v1/event-types/"):
                         valid = isinstance(result.get("name"), str) and isinstance(result.get("verified"), bool)

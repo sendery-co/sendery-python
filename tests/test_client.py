@@ -6,6 +6,19 @@ from sendery import Sendery, SenderyError
 
 
 class ClientTests(unittest.TestCase):
+    def test_render_uses_sandbox_credentials_and_returns_complete_content(self):
+        client = Sendery("snd_sandbox_test")
+        with patch.object(client._opener, "open", return_value=io.BytesIO(b'{"subject":"Hello","html":"<p>Hello</p>","text":"Hello"}')) as request:
+            self.assertEqual("Hello", client.render(template="welcome", data={"name":"Steven"}, locale="ja", version=2)["subject"])
+            req = request.call_args.args[0]
+            self.assertEqual("https://sendery.co/api/v1/emails/render", req.full_url)
+            self.assertEqual("Bearer snd_sandbox_test", req.get_header("Authorization"))
+            self.assertEqual({"template":"welcome","data":{"name":"Steven"},"locale":"ja","version":2}, json.loads(req.data))
+        with patch.object(client._opener, "open", return_value=io.BytesIO(b'{"html":"body"}')):
+            with self.assertRaises(SenderyError):
+                client.render(template="welcome", data={})
+
+
     def test_catalog_transport_validates_the_response_shape(self):
         client = Sendery("test")
         with patch.object(client._opener, "open", return_value=io.BytesIO(b'{"name":"document.signed","verified":false}')):
