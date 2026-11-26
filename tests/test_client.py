@@ -31,7 +31,7 @@ class ClientTests(unittest.TestCase):
 
     def test_event_definitions_and_catalog_have_distinct_response_shapes(self):
         client = Sendery("test")
-        definition = {"label": "Document signed", "fields": {}, "recipients": {}}
+        definition = {"label": "Document signed", "object": {"type": "document", "label": "Document"}, "fields": {"email": {"label": "Email", "path": "email", "type": "email"}}}
         with patch.object(client, "_request", return_value={"name": "document.signed", "verified": False}) as request:
             self.assertFalse(client.define_event("document.signed", definition)["verified"])
             self.assertEqual(("PUT", "/api/v1/event-types/document.signed"), request.call_args.args[:2])
@@ -42,13 +42,14 @@ class ClientTests(unittest.TestCase):
     def test_events_freeze_nested_data_and_retry_with_the_same_key(self):
         client = Sendery("test")
         data = {"owner": {"email": "steven@example.com"}}
-        event = client.event(name="listing.created", object_type="listing", object_id="42", data=data, correlation_id="attempt-1")
+        event = client.event(name="listing.created", object_type="listing", object_id="42", data=data, correlation_id="attempt-1", language="ja")
         data["owner"]["email"] = "changed@example.com"
         with patch.object(client, "_request", side_effect=[SenderyError(503), {"id": "event", "status": "accepted"}]) as request, patch("sendery.time.sleep"):
             event.retry().send()
         self.assertEqual(request.call_args_list[0], request.call_args_list[1])
         self.assertEqual("/api/v1/events", request.call_args.args[1])
         self.assertEqual("steven@example.com", json.loads(request.call_args.args[2])["data"]["owner"]["email"])
+        self.assertEqual("ja", json.loads(request.call_args.args[2])["language"])
         with patch.object(client, "_request") as request:
             client.get_event("event/id")
             self.assertEqual("/api/v1/events/event%2Fid", request.call_args.args[1])

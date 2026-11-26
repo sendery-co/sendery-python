@@ -113,16 +113,18 @@ class Sendery:
         return self._request("POST", "/api/v1/emails/render", json.dumps(payload, allow_nan=False).encode())
 
     def define_event(self, name, definition):
-        """Register readable fields and recipient roles once per event type."""
+        """Register readable fields, including at least one email address field."""
         return self._request("PUT", "/api/v1/event-types/" + quote(name, safe=""), json.dumps(definition, allow_nan=False).encode())
 
     def get_event_types(self):
         return self._request("GET", "/api/v1/event-types")["events"]
 
-    def event(self, *, name, object_type, object_id, data, correlation_id=None, idempotency_key=None):
+    def event(self, *, name, object_type, object_id, data, correlation_id=None, idempotency_key=None, language=None):
         if not isinstance(data, dict):
             raise ValueError("data must be a dictionary.")
         payload = {"name": name, "object": {"type": object_type, "id": object_id}, "data": data}
+        if language is not None:
+            payload["language"] = language
         if correlation_id is not None:
             payload["correlation_id"] = correlation_id
         return PendingEvent(self, payload, idempotency_key if idempotency_key is not None else str(uuid.uuid4()))
